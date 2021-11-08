@@ -1,0 +1,61 @@
+---
+# task file for Kubernetes components
+
+- name: Install Kupernetes components(kubeadm, kubelet, kubectl)
+  package:
+    state: present
+    name:
+      - kubelet-1.22.2
+      - kubeadm-1.22.2
+      - kubectl-1.22.2
+  register: k8s_installed
+
+- name: Lock Kubernets components version
+  command:
+    cmd: yum versionlock kubelet kubeadm kubectl
+    warn: false
+  when: k8s_installed.changed == True
+
+- name: Install bash completion - kubectl
+  shell: kubectl completion bash > /etc/bash_completion.d/kubectl
+  when: k8s_installed.changed == True
+
+- name: Install bash completion - crictl
+  command:
+    cmd: crictl completion > /etc/bash_completion.d/crictl
+    warn: false
+  when: k8s_installed.changed == True
+
+- name: Enable kubelet service
+  ansible.builtin.systemd:
+    name: kubelet
+    state: started
+    enabled: yes
+
+- name: Download etcd archive( etcdctl only )
+  ansible.builtin.get_url:
+    url: https://storage.googleapis.com/etcd/v3.5.0/etcd-v3.5.0-linux-amd64.tar.gz
+    dest: /tmp
+  register: k8s_etcd_downloaded
+  when:
+    - inventory_hostname in groups['k8s_masters']
+
+- name: Unpack etcd archive( etcdctl only )
+  ansible.builtin.unarchive:
+    src: /tmp/etcd-v3.5.0-linux-amd64.tar.gz
+    dest: /tmp/
+    remote_src: yes
+  register: k8s_etcd_unpacked
+  when:
+    - k8s_etcd_downloaded.changed == True
+    - inventory_hostname in groups['k8s_masters']
+
+- name: Copy etcdctl binary to /bin
+  copy:
+    src: "/tmp/etcd-v3.5.0-linux-amd64/etcdctl"
+    dest: "/bin/"
+    owner: root
+    group: root
+    mode: "755"
+    remote_src: yes
+  when: k8s_etcd_unpacked.changed == True

@@ -1,0 +1,21 @@
+---
+# tasks file for Kubernetes Container Runtime Interface (CRI)
+
+- name: Install CRI - CRI-O
+  package:
+    state: present
+    name:
+      - cri-o-1.22.0
+  register: cri_installed
+
+- name: Lock crio version
+  command:
+    cmd: yum versionlock cri-o
+    warn: false
+  when: cri_installed.changed == True
+
+- name: Enable crio service
+  ansible.builtin.systemd:
+    name: crio
+    state: started
+    enabled: yes

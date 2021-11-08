@@ -1,0 +1,8 @@
+---
+# tasks file for ansible-k8s-cluster
+
+- import_tasks: k8s-repos.yml
+- import_tasks: k8s-cri-crio.yml
+- import_tasks: k8s-components.yml
+- import_tasks: k8s-init.yml
+- import_tasks: k8s-cni-flannel.yml

@@ -1,0 +1,27 @@
+---
+# install containerd repo
+# yum-config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+#
+#- name: Add containerd repo
+#  yum_repository:
+#    name: "docker-ce"
+#    description: "Docker CE Stable"
+#    baseurl: "https://download.docker.com/linux/centos/$releasever/$basearch/stable"
+#    gpgcheck: yes
+#    gpgkey: "https://download.docker.com/linux/centos/gpg"
+#
+- name: Add kubernetes repo
+  yum_repository:
+    name: "kubernetes"
+    description: "Kubernetes"
+    baseurl: "https://packages.cloud.google.com/yum/repos/kubernetes-el7-$basearch"
+    gpgcheck: yes
+    gpgkey: "https://packages.cloud.google.com/yum/doc/yum-key.gpg https://packages.cloud.google.com/yum/doc/rpm-package-key.gpg"
+
+- name: Add devel_kubic_libcontainers_stable_cri-o_1.22 repo
+  yum_repository:
+    name: "devel_kubic_libcontainers_stable_cri-o_1.22"
+    description: "devel:kubic:libcontainers:stable:cri-o:1.22 (CentOS_8)"
+    baseurl: "https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable:/cri-o:/1.22/CentOS_8/"
+    gpgcheck: yes
+    gpgkey: "https://download.opensuse.org/repositories/devel:/kubic:/libcontainers:/stable:/cri-o:/1.22/CentOS_8/repodata/repomd.xml.key"

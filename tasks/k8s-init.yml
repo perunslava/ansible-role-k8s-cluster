@@ -1,0 +1,124 @@
+---
+# task file for Kubernetes cluster initialization
+
+- name: Check if kubelet is configured
+  stat:
+    path: /etc/kubernetes/kubelet.conf
+  register: kubelet_configured
+
+- name: debug - kubelet_configured
+  debug:
+    msg: "{{ kubelet_configured }}"
+
+# patch coredns - affinity
+# https://github.com/kubernetes/kubeadm/issues/1657
+# https://github.com/kubernetes/kops/pull/7400/files
+- name: Run kubeadm init
+  shell: kubeadm init --ignore-preflight-errors=NumCPU --pod-network-cidr=10.244.0.0/16 --upload-certs --control-plane-endpoint=192.168.8.33:6443 --cri-socket=/run/crio/crio.sock --v=5 > /root/kubeadm.log 2>&1
+  register: kubeadm_init
+  when:
+    - inventory_hostname == "m-1-k8s"
+    - kubelet_configured.stat.exists == False
+
+- name: debug - inventory_hostname
+  debug:
+    msg: "{{ inventory_hostname }}"
+  when:
+    - inventory_hostname == "m-1-k8s"
+    - kubelet_configured.stat.exists == False
+
+- name: Upload certs and generate cert key
+  shell: kubeadm init phase upload-certs --upload-certs | grep -v upload-certs
+  register: kubeadm_cert_key
+  when:
+    - inventory_hostname == "m-1-k8s"
+
+- name: debug - kubeadm_cert_key.stdout
+  debug:
+    msg: "{{ kubeadm_cert_key.stdout }}"
+  when:
+    - inventory_hostname == "m-1-k8s"
+
+- name: Generate kubeadm join command
+  command:
+    cmd: 'kubeadm token create --print-join-command --ttl 1h --description "ansible token"'
+    warn: false
+  register: kubeadm_join_cmd
+  when:
+    - inventory_hostname == "m-1-k8s"
+
+- name: Add kubeadm join metadata to dummy host
+  add_host:
+    name: kubeadm_join_metadata
+    cert_key: "{{ kubeadm_cert_key.stdout }}"
+    join_cmd: "{{ kubeadm_join_cmd.stdout }}"
+  when:
+    - inventory_hostname == "m-1-k8s"
+#
+#- name: set join command
+#  set_fact:
+#    kubeadm_join_metadata: "{{ kubeadm_join_cmd.stdout }}"
+#
+- name: debug - join masters
+  debug:
+    msg: "{{ hostvars['kubeadm_join_metadata']['join_cmd'] }} --ignore-preflight-errors=NumCPU --cri-socket=/run/crio/crio.sock --control-plane --certificate-key {{ hostvars['kubeadm_join_metadata']['cert_key'] }}"
+  when:
+    - kubelet_configured.stat.exists == False
+    - inventory_hostname in groups['k8s_masters']
+    - inventory_hostname != "m-1-k8s"
+
+- name: Run kubeadm join --control-plane ( join masters )
+  shell: "{{ hostvars['kubeadm_join_metadata']['join_cmd'] }} --ignore-preflight-errors=NumCPU --cri-socket=/run/crio/crio.sock --control-plane --certificate-key {{ hostvars['kubeadm_join_metadata']['cert_key'] }}"
+  when:
+    - kubelet_configured.stat.exists == False
+    - inventory_hostname in groups['k8s_masters']
+    - inventory_hostname != "m-1-k8s"
+
+- name: debug - join workers
+  debug:
+    msg: "{{ hostvars['kubeadm_join_metadata']['join_cmd'] }} --ignore-preflight-errors=NumCPU --cri-socket=/run/crio/crio.sock"
+  when:
+    - kubelet_configured.stat.exists == False
+    - inventory_hostname in groups['k8s_workers']
+
+- name: Run kubeadm join ( join workers )
+  command:
+    cmd: "{{ hostvars['kubeadm_join_metadata']['join_cmd'] }} --ignore-preflight-errors=NumCPU --cri-socket=/run/crio/crio.sock"
+  when:
+    - kubelet_configured.stat.exists == False
+    - inventory_hostname in groups['k8s_workers']
+
+# mkdir -p $HOME/.kube
+# cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+# chown $(id -u):$(id -g) $HOME/.kube/config
+- name: Check if ~/.kube/config exist
+  stat:
+    path: "/root/.kube/config"
+  register: kubectl_config
+  when:
+    - inventory_hostname in groups['k8s_masters']
+
+- name: debug - kubectl_config
+  debug:
+    msg: "{{ kubectl_config }}"
+  when:
+    - inventory_hostname in groups['k8s_masters']
+
+- name: Prepare configuration for kubectl - ~/.kube dir
+  file:
+    path: "/root/.kube"
+    state: directory
+    mode: "0755"
+  when:
+    - inventory_hostname in groups['k8s_masters']
+
+- name: Prepare configuration for kubectl - ~/.kube/config
+  copy:
+    src: "/etc/kubernetes/admin.conf"
+    dest: "/root/.kube/config"
+    remote_src: yes
+    owner: root
+    group: root
+    mode: "600"
+  when:
+    - inventory_hostname in groups['k8s_masters']

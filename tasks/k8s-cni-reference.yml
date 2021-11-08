@@ -1,0 +1,30 @@
+---
+# tasks file for Kubernetes Container Network Interface (CNI)
+
+- name: Install CNI plugin - reference plugin( www.cni.dev )
+  package:
+    state: present
+    name:
+      - containernetworking-plugins-0.9.1
+  register: cni_installed
+
+- name: Lock CNI plugin version
+  command:
+    cmd: yum versionlock containernetworking-plugins
+    warn: false
+  when: cni_installed.changed == True
+
+- name: Configure CNI bridge
+  copy:
+    src: "{{ role_path }}/files/cni/reference-10-bridge.conf"
+    dest: "/etc/cni/net.d/10-bridge.conf"
+    owner: root
+    group: root
+    mode: "644"
+- name: Configure CNI loopack
+  copy:
+    src: "{{ role_path }}/files/cni/reference-99-loopback.conf"
+    dest: "/etc/cni/net.d/99-loopback.conf"
+    owner: root
+    group: root
+    mode: "644"
